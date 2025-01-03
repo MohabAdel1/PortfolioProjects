@@ -1,0 +1,159 @@
+--to check the data inside the database
+
+SELECT * 
+FROM [dbo].[BostaOrders]
+
+
+--view the dublicates in the database
+
+SELECT OrderNumber, COUNT(*)
+FROM [dbo].[BostaOrders]
+GROUP BY OrderNumber
+HAVING COUNT(*) > 1; 
+
+
+--delete the dublicates in the database
+
+With BostaOrdersCTE AS
+(
+	SELECT *, ROW_NUMBER() Over(Partition BY OrderNumber order BY OrderNumber) as RowNumber
+	FROM [dbo].[BostaOrders]
+)
+DELETE FROM BostaOrdersCTE
+WHERE RowNumber >1
+
+-- check for NULL values in CityName
+SELECT *
+FROM [dbo].[BostaOrders]
+WHERE CityName IS NULL;
+
+-- check for NULL values in NextDayFees
+SELECT *
+FROM [dbo].[BostaOrders]
+WHERE NextDayFees IS NULL;
+
+-- Replace  NULL values to 0 in NextDayFees
+
+UPDATE [dbo].[BostaOrders]
+SET NextDayFees = 0
+WHERE NextDayFees IS NULL;
+
+-- Replace  NULL values to Unkown in DriverId
+UPDATE [dbo].[BostaOrders]
+SET [DriverId] = 'Unkown'
+WHERE [DriverId] IS NULL;
+
+-- Replace  NULL values to Unkown in RouteId
+UPDATE [dbo].[BostaOrders]
+SET [RouteId] = 'Unkown'
+WHERE [RouteId] IS NULL;
+
+
+--ADD new Column to calculate the feesperrevenue
+ALTER TABLE [dbo].[BostaOrders]
+ADD FeesPerRevenue DECIMAL(10, 4);
+
+UPDATE [dbo].[BostaOrders]
+SET FeesPerRevenue = NextDayFees / Revenue
+WHERE Revenue > 0;
+
+--Add new columns ordermonth and year to the dataset 
+ALTER TABLE [dbo].[BostaOrders]
+ADD OrderMonth INT;
+
+ALTER TABLE [dbo].[BostaOrders]
+ADD OrderYear INT;
+
+UPDATE [dbo].[BostaOrders]
+SET 
+    OrderYear = YEAR([createdAt]),
+    OrderMonth = MONTH([createdAt]);
+
+--Total Revenue based on city name
+SELECT CityName, ROUND(SUM(Revenue),2) AS TotalRevenue
+FROM [dbo].[BostaOrders]
+GROUP BY CityName
+ORDER BY TotalRevenue DESC;
+
+--Total Shipment by city name
+SELECT CityName, COUNT(*) AS shipment_count
+FROM [dbo].[BostaOrders]
+GROUP BY CityName
+ORDER BY shipment_count DESC;
+
+--Total Number of Orders and revenue by each driver
+SELECT [DriverId], COUNT(*) AS TotalOrders, SUM([Revenue]) AS TotalRevenue
+FROM [dbo].[BostaOrders]
+GROUP BY DriverId
+ORDER BY TotalRevenue DESC;
+
+SELECT [DriverId], COUNT([OrderNumber])
+FROM [dbo].[BostaOrders]
+WHERE [DriverId] = 'Unkown'
+GROUP BY DriverId
+
+
+
+--Total revenue by month and year
+SELECT [OrderMonth],[OrderYear], ROUND(SUM(Revenue),2) AS TotalRevenue
+FROM [dbo].[BostaOrders]
+GROUP BY [OrderMonth],[OrderYear]
+ORDER BY [OrderMonth],[OrderYear]DESC;
+
+
+--Total DelayedOrders by CityName and Year
+
+ALTER TABLE [dbo].[BostaOrders]
+ADD  DaysDeliveryDelayed INT;
+
+
+
+SELECT [CityName],[OrderYear], COUNT(*) AS TotalDelayedOrders
+FROM [dbo].[BostaOrders]
+WHERE [NextDayFees] > 0 
+GROUP BY [CityName],[OrderYear]
+ORDER BY [OrderYear]DESC , TotalDelayedOrders DESC
+
+
+--Categorizing Revenue 
+ALTER TABLE [dbo].[BostaOrders]
+ADD RevenueCategory VARCHAR(20);
+
+UPDATE [dbo].[BostaOrders]
+SET RevenueCategory = CASE
+    WHEN [Revenue] < 20 THEN 'Low'
+    WHEN [Revenue] BETWEEN 20 AND 50 THEN 'Medium'
+    ELSE 'High'
+END;
+
+
+--FailedPercentage by Year
+SELECT 
+    [OrderYear],
+    COUNT(*) AS TotalOrders,
+    SUM(CASE WHEN [Status] = 'Failed' THEN 1 ELSE 0 END) AS FailedOrders,
+	ROUND(CAST(SUM(CASE WHEN [Status] = 'Failed' THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) * 100, 2) AS FailedPercentage
+	FROM [dbo].[BostaOrders]
+GROUP BY [OrderYear]
+ORDER BY [OrderYear];
+
+--SuccessPercentage by Year
+
+SELECT 
+    [OrderYear],
+    COUNT(*) AS TotalOrders,
+    SUM(CASE WHEN [Status] = 'SUCCESS' THEN 1 ELSE 0 END) AS SuccessOrders,
+	ROUND(CAST(SUM(CASE WHEN [Status] = 'SUCCESS' THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) * 100, 2) AS SuccessPercentage
+	FROM [dbo].[BostaOrders]
+GROUP BY [OrderYear]
+ORDER BY [OrderYear];
+
+--Total Delayed Orders by ASSIGNED HUB
+SELECT [AssignedHub],[OrderYear], COUNT(*) AS TotalDelayedOrders
+FROM [dbo].[BostaOrders]
+WHERE [NextDayFees] > 0 
+GROUP BY [AssignedHub],[OrderYear]
+ORDER BY [OrderYear]DESC , TotalDelayedOrders DESC
+
+
+
